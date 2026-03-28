@@ -51,6 +51,7 @@ def download_best_subtitles(
     only_one=False,
     compute_score=None,
     use_original_format=False,
+    max_subtitles_per_language=1,
     **kwargs
 ):
     downloaded_subtitles = defaultdict(list)
@@ -79,6 +80,7 @@ def download_best_subtitles(
             only_one=only_one,
             compute_score=compute_score,
             use_original_format=use_original_format,
+            max_subtitles_per_language=max_subtitles_per_language,
         )
         logger.info("Downloaded %d subtitle(s)", len(subtitles))
         downloaded_subtitles[video].extend(subtitles)

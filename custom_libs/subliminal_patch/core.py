@@ -524,7 +524,7 @@ class SZProviderPool(ProviderPool):
         return True
 
     def download_best_subtitles(self, subtitles, video, languages, min_score=0, hearing_impaired=False, only_one=False,
-                                compute_score=None, use_original_format=False):
+                                compute_score=None, use_original_format=False, max_subtitles_per_language=1):
         """Download the best matching subtitles.
 
         patch:
@@ -554,6 +554,16 @@ class SZProviderPool(ProviderPool):
         is_episode = isinstance(video, Episode)
         max_score = sum(val for key, val in compute_score._scores['episode' if is_episode else 'movie'].items() if key != "hash")
 
+        def language_key(language):
+            if getattr(language, "forced", False):
+                return f"{language}:forced"
+            if getattr(language, "hi", False):
+                return f"{language}:hi"
+            return str(language)
+
+        max_subtitles_per_language = max(1, int(max_subtitles_per_language))
+        requested_language_keys = {language_key(language) for language in languages}
+
         # sort subtitles by score
         unsorted_subtitles = []
 
@@ -581,6 +591,7 @@ class SZProviderPool(ProviderPool):
 
         # download best subtitles, falling back on the next on error
         downloaded_subtitles = []
+        downloaded_language_counts = defaultdict(int)
         for subtitle, score, score_without_hash, matches, orig_matches in scored_subtitles:
             # check score
             if score < min_score:
@@ -589,14 +600,15 @@ class SZProviderPool(ProviderPool):
                             subtitle, score, min_score, max_score, min_score_in_percent)
                 break
 
-            # stop when all languages are downloaded
-            if set(str(s.language) for s in downloaded_subtitles) == languages:
-                logger.debug('All languages downloaded')
+            # stop when each requested language reached its download cap
+            if requested_language_keys and all(downloaded_language_counts[key] >= max_subtitles_per_language
+                                               for key in requested_language_keys):
+                logger.debug('All requested languages reached the download cap')
                 break
 
-            # check downloaded languages
-            if subtitle.language in set(str(s.language) for s in downloaded_subtitles):
-                logger.debug('%r: Skipping subtitle: already downloaded', subtitle.language)
+            subtitle_language_key = language_key(subtitle.language)
+            if downloaded_language_counts[subtitle_language_key] >= max_subtitles_per_language:
+                logger.debug('%r: Skipping subtitle: language download cap reached', subtitle.language)
                 continue
 
             # bail out if hearing_impaired was wrong
@@ -630,6 +642,7 @@ class SZProviderPool(ProviderPool):
             if self.download_subtitle(subtitle):
                 subtitle.score = score
                 downloaded_subtitles.append(subtitle)
+                downloaded_language_counts[subtitle_language_key] += 1
 
             # stop if only one subtitle is requested
             if only_one:
@@ -936,6 +949,11 @@ def _search_external_subtitles(path, languages=None, only_one=False, match_stric
             if adv_tag in ['forced', 'normal', 'default', 'embedded', 'embedded-forced', 'custom', 'hi', 'cc', 'sdh']:
                 p_root = split_tag[0]
 
+        # allow duplicate subtitle filenames like `video.en.2.srt` or `video.en.2.forced.srt`
+        split_duplicate = p_root.rsplit('.', 1)
+        if len(split_duplicate) > 1 and split_duplicate[1].isdigit():
+            p_root = split_duplicate[0]
+
         forced = False
         if adv_tag:
             forced = "forced" in adv_tag
@@ -1174,12 +1192,39 @@ def get_subtitle_path(video_path, language=None, extension='.srt', forced_tag=Fa
     return subtitle_root + extension
 
 
+def _inject_subtitle_duplicate_suffix(subtitle_path, duplicate_index):
+    subtitle_root, extension = os.path.splitext(subtitle_path)
+    split_root = subtitle_root.rsplit('.', 1)
+
+    if len(split_root) > 1 and split_root[1].lower() in ['forced', 'normal', 'default', 'embedded',
+                                                          'embedded-forced', 'custom', 'hi', 'cc', 'sdh']:
+        subtitle_root = f"{split_root[0]}.{duplicate_index}.{split_root[1]}"
+    else:
+        subtitle_root = f"{subtitle_root}.{duplicate_index}"
+
+    return subtitle_root + extension
+
+
+def _get_available_subtitle_path(subtitle_path, reserved_paths=None):
+    reserved_paths = reserved_paths or set()
+
+    if subtitle_path not in reserved_paths and not os.path.exists(subtitle_path):
+        return subtitle_path
+
+    duplicate_index = 2
+    while True:
+        candidate = _inject_subtitle_duplicate_suffix(subtitle_path, duplicate_index)
+        if candidate not in reserved_paths and not os.path.exists(candidate):
+            return candidate
+        duplicate_index += 1
+
+
 def save_subtitles(file_path, subtitles, single=False, directory=None, chmod=None, formats=("srt",),
                    tags=None, path_decoder=None, debug_mods=False):
     """Save subtitles on filesystem.
 
-    Subtitles are saved in the order of the list. If a subtitle with a language has already been saved, other subtitles
-    with the same language are silently ignored.
+    Subtitles are saved in the order of the list. When multiple subtitles share the same language, they are saved with
+    incrementing suffixes to avoid overwriting each other.
 
     The extension used is `.lang.srt` by default or `.srt` is `single` is `True`, with `lang` being the IETF code for
     the :attr:`~subliminal.subtitle.Subtitle.language` of the subtitle.
@@ -1199,6 +1244,7 @@ def save_subtitles(file_path, subtitles, single=False, directory=None, chmod=Non
     logger.debug("Subtitle formats requested: %r", formats)
 
     saved_subtitles = []
+    reserved_paths = set()
     for subtitle in subtitles:
         # check if HI mods will be used to get the proper name for the subtitles file
         must_remove_hi = subtitle.mods and 'remove_HI' in subtitle.mods
@@ -1206,11 +1252,6 @@ def save_subtitles(file_path, subtitles, single=False, directory=None, chmod=Non
         # check content
         if subtitle.content is None or subtitle.text is None:
             logger.error('Skipping subtitle %r: no content', subtitle)
-            continue
-
-        # check language
-        if subtitle.language in set(s.language.basename for s in saved_subtitles):
-            logger.debug('Skipping subtitle %r: language already saved', subtitle)
             continue
 
         # create subtitle path
@@ -1231,6 +1272,7 @@ def save_subtitles(file_path, subtitles, single=False, directory=None, chmod=Non
         # force unicode
         subtitle_path = UnicodeDammit(subtitle_path).unicode_markup
 
+        subtitle_path = _get_available_subtitle_path(subtitle_path, reserved_paths=reserved_paths)
         subtitle.storage_path = subtitle_path
 
         for format in formats:
@@ -1254,6 +1296,7 @@ def save_subtitles(file_path, subtitles, single=False, directory=None, chmod=Non
             os.chmod(subtitle_path, chmod)
 
         saved_subtitles.append(subtitle)
+        reserved_paths.add(subtitle.storage_path)
 
         # check single
         if single:
