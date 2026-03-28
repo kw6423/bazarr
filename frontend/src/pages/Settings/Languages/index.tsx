@@ -7,6 +7,7 @@ import {
   CollapseBox,
   Layout,
   Message,
+  Number,
   Section,
   Selector,
 } from "@/pages/Settings/components";
@@ -63,6 +64,16 @@ const SettingsLanguagesView: FunctionComponent = () => {
           We don't recommend enabling this option unless absolutely required
           (ie: media player not supporting language code in subtitles filename).
           Results may vary.
+        </Message>
+        <Number
+          label="Maximum subtitles to download per language"
+          settingKey="settings-general-max_subtitles_per_language"
+          min={1}
+          max={10}
+        ></Number>
+        <Message>
+          When Bazarr downloads subtitles for a requested language, keep up to
+          this many subtitle files for that language in the same run.
         </Message>
         <LanguageSelector
           label="Languages Filter"

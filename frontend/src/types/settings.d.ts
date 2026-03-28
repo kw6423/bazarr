@@ -51,6 +51,7 @@ declare namespace Settings {
     multithreading: boolean;
     minimum_score: number;
     minimum_score_movie: number;
+    max_subtitles_per_language: number;
     movie_default_enabled: boolean;
     movie_default_profile?: number;
     serie_default_enabled: boolean;
