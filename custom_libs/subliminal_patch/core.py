@@ -563,6 +563,20 @@ class SZProviderPool(ProviderPool):
 
         max_subtitles_per_language = max(1, int(max_subtitles_per_language))
         requested_language_keys = {language_key(language) for language in languages}
+        requested_languages_by_basename = defaultdict(list)
+        for language in languages:
+            requested_languages_by_basename[language.basename].append(language)
+
+        def download_cap_key(subtitle_language):
+            subtitle_key = language_key(subtitle_language)
+            if subtitle_key in requested_language_keys:
+                return subtitle_key
+
+            matching_requested_languages = requested_languages_by_basename.get(subtitle_language.basename, [])
+            if len(matching_requested_languages) == 1:
+                return language_key(matching_requested_languages[0])
+
+            return subtitle_key
 
         # sort subtitles by score
         unsorted_subtitles = []
@@ -606,7 +620,7 @@ class SZProviderPool(ProviderPool):
                 logger.debug('All requested languages reached the download cap')
                 break
 
-            subtitle_language_key = language_key(subtitle.language)
+            subtitle_language_key = download_cap_key(subtitle.language)
             if downloaded_language_counts[subtitle_language_key] >= max_subtitles_per_language:
                 logger.debug('%r: Skipping subtitle: language download cap reached', subtitle.language)
                 continue

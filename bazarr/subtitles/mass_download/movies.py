@@ -158,16 +158,15 @@ def movie_download_specific_subtitles(radarr_id, language, hi, forced, job_id=No
         result = list(generate_subtitles(moviePath, [(language, hi, forced)], audio_language,
                                          sceneName, title, 'movie', profile_id=get_profile_id(movie_id=radarr_id),
                                          job_id=job_id))
-        if isinstance(result, list) and len(result):
-            result = result[0]
-            if isinstance(result, tuple) and len(result):
-                result = result[0]
-            history_log_movie(1, radarr_id, result)
-            send_notifications_movie(radarr_id, result.message)
-            store_subtitles_movie(result.path, moviePath)
-        else:
+        if not result:
             event_stream(type='movie', payload=radarr_id)
             return '', 204
+        for item in result:
+            if isinstance(item, tuple) and len(item):
+                item = item[0]
+            history_log_movie(1, radarr_id, item)
+            send_notifications_movie(radarr_id, item.message)
+            store_subtitles_movie(item.path, moviePath)
     except OSError:
         return 'Unable to save subtitles file. Permission or path mapping issue?', 409
     else:

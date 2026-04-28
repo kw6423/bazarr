@@ -221,16 +221,15 @@ def episode_download_specific_subtitles(sonarr_series_id, sonarr_episode_id, lan
         result = list(generate_subtitles(episodePath, [(language, hi, forced)], audio_language, sceneName,
                                          title, 'series', profile_id=get_profile_id(episode_id=sonarr_episode_id),
                                          job_id=job_id))
-        if isinstance(result, list) and len(result):
-            result = result[0]
-            if isinstance(result, tuple) and len(result):
-                result = result[0]
-            history_log(1, sonarr_series_id, sonarr_episode_id, result)
-            send_notifications(sonarr_series_id, sonarr_episode_id, result.message)
-            store_subtitles(result.path, episodePath)
-        else:
+        if not result:
             event_stream(type='episode', payload=sonarr_episode_id)
             return '', 204
+        for item in result:
+            if isinstance(item, tuple) and len(item):
+                item = item[0]
+            history_log(1, sonarr_series_id, sonarr_episode_id, item)
+            send_notifications(sonarr_series_id, sonarr_episode_id, item.message)
+            store_subtitles(item.path, episodePath)
     except OSError:
         return 'Unable to save subtitles file. Permission or path mapping issue?', 409
     else:

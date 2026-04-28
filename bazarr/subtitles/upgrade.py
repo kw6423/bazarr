@@ -140,15 +140,13 @@ def upgrade_episodes_subtitles(job_id=None):
                                              episode['subtitles_path']),
                                          job_id=job_id))
 
-        if result:
-            if isinstance(result, list) and len(result):
-                result = result[0]
-            if isinstance(result, tuple) and len(result):
-                result = result[0]
+        for item in result:
+            if isinstance(item, tuple) and len(item):
+                item = item[0]
             store_subtitles(episode['video_path'], path_mappings.path_replace(episode['video_path']))
-            history_log(3, episode['sonarrSeriesId'], episode['sonarrEpisodeId'], result,
+            history_log(3, episode['sonarrSeriesId'], episode['sonarrEpisodeId'], item,
                         upgraded_from_id=episode['original_id'])
-            send_notifications(episode['sonarrSeriesId'], episode['sonarrEpisodeId'], result.message)
+            send_notifications(episode['sonarrSeriesId'], episode['sonarrEpisodeId'], item.message)
             event_stream(type="episode-history")
     jobs_queue.update_job_name(job_id=job_id, new_job_name='Tried to upgrade episodes subtitles')
 
@@ -244,15 +242,13 @@ def upgrade_movies_subtitles(job_id=None):
                                          previous_subtitles_to_delete=path_mappings.path_replace_movie(
                                              movie['subtitles_path']),
                                          job_id=job_id))
-        if result:
-            if isinstance(result, list) and len(result):
-                result = result[0]
-            if isinstance(result, tuple) and len(result):
-                result = result[0]
+        for item in result:
+            if isinstance(item, tuple) and len(item):
+                item = item[0]
             store_subtitles_movie(movie['video_path'],
                                   path_mappings.path_replace_movie(movie['video_path']))
-            history_log_movie(3, movie['radarrId'], result, upgraded_from_id=movie['original_id'])
-            send_notifications_movie(movie['radarrId'], result.message)
+            history_log_movie(3, movie['radarrId'], item, upgraded_from_id=movie['original_id'])
+            send_notifications_movie(movie['radarrId'], item.message)
             event_stream(type="movie-history")
     jobs_queue.update_job_name(job_id=job_id, new_job_name='Tried to upgrade movies subtitles')
 

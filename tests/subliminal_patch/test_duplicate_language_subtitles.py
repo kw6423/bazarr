@@ -91,3 +91,30 @@ def test_provider_pool_downloads_multiple_ranked_subtitles_per_language():
 
     assert len(downloaded) == 2
     assert [subtitle.fake_score for subtitle in downloaded] == [300, 250]
+
+
+def test_provider_pool_counts_language_variants_against_single_requested_language():
+    pool = ProviderPool.__new__(ProviderPool)
+    pool.download_subtitle = lambda subtitle: True
+
+    language = Language.fromietf("en")
+    hi_language = Language.rebuild(language, hi=True)
+    subtitles = [
+        _FakeSubtitle(hi_language, 300),
+        _FakeSubtitle(hi_language, 250),
+        _FakeSubtitle(language, 200),
+    ]
+
+    downloaded = pool.download_best_subtitles(
+        subtitles=subtitles,
+        video=object(),
+        languages={language},
+        min_score=0,
+        hearing_impaired=False,
+        only_one=False,
+        compute_score=_FakeComputeScore(),
+        max_subtitles_per_language=2,
+    )
+
+    assert len(downloaded) == 2
+    assert [subtitle.fake_score for subtitle in downloaded] == [300, 250]
