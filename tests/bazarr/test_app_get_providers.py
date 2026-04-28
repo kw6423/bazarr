@@ -1,9 +1,17 @@
 import inspect
+import ast
+from types import SimpleNamespace
 
 import pytest
 from subliminal_patch.core import Language
 
 from bazarr.app import get_providers
+
+
+def _settings_with_language_equals(value):
+    if isinstance(value, str):
+        value = ast.literal_eval(value)
+    return SimpleNamespace(general=SimpleNamespace(language_equals=value))
 
 
 def test_get_providers_auth():
@@ -34,7 +42,7 @@ def test_get_providers_auth_embeddedsubtitles():
     assert isinstance(item["cache_dir"], str)
     assert isinstance(item["ffprobe_path"], str)
     assert isinstance(item["ffmpeg_path"], str)
-    assert isinstance(item["timeout"], str)
+    assert isinstance(item["timeout"], int)
     assert isinstance(item["unknown_as_fallback"], bool)
     assert isinstance(item["fallback_lang"], str)
 
@@ -52,14 +60,12 @@ def test_get_language_equals_default_settings():
 
 
 def test_get_language_equals_injected_settings_invalid():
-    config = get_providers.settings
-    config.set("general", "language_equals", '["invalid"]')
+    config = _settings_with_language_equals(["invalid"])
     assert not get_providers.get_language_equals(config)
 
 
 def test_get_language_equals_injected_settings_valid():
-    config = get_providers.settings
-    config.set("general", "language_equals", '["spa:spa-MX"]')
+    config = _settings_with_language_equals(["spa:spa-MX"])
 
     result = get_providers.get_language_equals(config)
     assert result == [(Language("spa"), Language("spa", "MX"))]
@@ -76,20 +82,14 @@ def test_get_language_equals_injected_settings_valid():
 def test_get_language_equals_injected_settings_custom_lang_alpha3(
     config_value, expected
 ):
-    config = get_providers.settings
-
-    config.set("general", "language_equals", config_value)
+    config = _settings_with_language_equals(config_value)
 
     result = get_providers.get_language_equals(config)
     assert result == [expected]
 
 
 def test_get_language_equals_injected_settings_multiple():
-    config = get_providers.settings
-
-    config.set(
-        "general",
-        "language_equals",
+    config = _settings_with_language_equals(
         "['eng@hi:eng', 'spa:spl', 'spa@hi:spl', 'spl@hi:spl']",
     )
 
@@ -98,8 +98,7 @@ def test_get_language_equals_injected_settings_multiple():
 
 
 def test_get_language_equals_injected_settings_valid_multiple():
-    config = get_providers.settings
-    config.set("general", "language_equals", '["spa:spa-MX", "spa-MX:spa"]')
+    config = _settings_with_language_equals(["spa:spa-MX", "spa-MX:spa"])
 
     result = get_providers.get_language_equals(config)
     assert result == [
@@ -109,8 +108,7 @@ def test_get_language_equals_injected_settings_valid_multiple():
 
 
 def test_get_language_equals_injected_settings_hi():
-    config = get_providers.settings
-    config.set("general", "language_equals", '["eng@hi:eng"]')
+    config = _settings_with_language_equals(["eng@hi:eng"])
 
     result = get_providers.get_language_equals(config)
     assert result == [(Language("eng", hi=True), Language("eng"))]

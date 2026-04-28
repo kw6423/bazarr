@@ -1,6 +1,6 @@
 from subzero.language import Language
 
-from subliminal_patch.core import ProviderPool, save_subtitles, search_external_subtitles
+from subliminal_patch.core import SZProviderPool, save_subtitles, search_external_subtitles
 from subliminal_patch.subtitle import Subtitle
 
 
@@ -68,7 +68,7 @@ class _FakeSubtitle:
 
 
 def test_provider_pool_downloads_multiple_ranked_subtitles_per_language():
-    pool = ProviderPool.__new__(ProviderPool)
+    pool = SZProviderPool.__new__(SZProviderPool)
     pool.download_subtitle = lambda subtitle: True
 
     language = Language.fromietf("en")
@@ -94,7 +94,7 @@ def test_provider_pool_downloads_multiple_ranked_subtitles_per_language():
 
 
 def test_provider_pool_counts_language_variants_against_single_requested_language():
-    pool = ProviderPool.__new__(ProviderPool)
+    pool = SZProviderPool.__new__(SZProviderPool)
     pool.download_subtitle = lambda subtitle: True
 
     language = Language.fromietf("en")

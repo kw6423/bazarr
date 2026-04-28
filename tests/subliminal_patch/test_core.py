@@ -5,6 +5,43 @@ import pytest
 from subliminal_patch import core
 
 
+class _LanguageEqualsSubtitle:
+    release_info = None
+
+    def __init__(self, language):
+        self.language = language
+        self.id = str(language)
+
+
+class _LanguageEqualsProvider:
+    languages = {core.Language("spa"), core.Language("spa", "MX")}
+    video_types = (core.Movie, core.Episode)
+
+    def __init__(self, **kwargs):
+        pass
+
+    @classmethod
+    def check(cls, video):
+        return isinstance(video, cls.video_types)
+
+    def initialize(self):
+        pass
+
+    def terminate(self):
+        pass
+
+    def list_subtitles(self, video, languages):
+        return [_LanguageEqualsSubtitle(language) for language in languages]
+
+
+@pytest.fixture
+def language_equals_provider():
+    provider_name = "language_equals"
+    core.provider_registry.register(provider_name, _LanguageEqualsProvider)
+    yield provider_name
+    del core.provider_registry[provider_name]
+
+
 def test_scan_video_movie(tmpdir):
     video_path = Path(tmpdir, "Taxi Driver 1976 Bluray 720p x264.mkv")
     video_path.touch()
@@ -114,9 +151,9 @@ def test_language_equals_check_set_do_nothing_w_forced():
 
 
 @pytest.fixture
-def language_equals_pool_intance():
+def language_equals_pool_intance(language_equals_provider):
     equals = [(core.Language("spa"), core.Language("spa", "MX"))]
-    yield core.SZProviderPool({"opensubtitlescom"}, language_equals=equals)
+    yield core.SZProviderPool({language_equals_provider}, language_equals=equals)
 
 
 def test_language_equals_pool_intance_list_subtitles(
@@ -129,10 +166,10 @@ def test_language_equals_pool_intance_list_subtitles(
     assert all(sub.language == core.Language("spa", "MX") for sub in subs)
 
 
-def test_language_equals_pool_intance_list_subtitles_reversed(movies):
+def test_language_equals_pool_intance_list_subtitles_reversed(movies, language_equals_provider):
     equals = [(core.Language("spa", "MX"), core.Language("spa"))]
     language_equals_pool_intance = core.SZProviderPool(
-        {"opensubtitlescom"}, language_equals=equals
+        {language_equals_provider}, language_equals=equals
     )
     subs = language_equals_pool_intance.list_subtitles(
         movies["dune"], {core.Language("spa")}
@@ -141,9 +178,9 @@ def test_language_equals_pool_intance_list_subtitles_reversed(movies):
     assert all(sub.language == core.Language("spa") for sub in subs)
 
 
-def test_language_equals_pool_intance_list_subtitles_empty_lang_equals(movies):
+def test_language_equals_pool_intance_list_subtitles_empty_lang_equals(movies, language_equals_provider):
     language_equals_pool_intance = core.SZProviderPool(
-        {"opensubtitlescom"}, language_equals=None
+        {language_equals_provider}, language_equals=None
     )
     subs = language_equals_pool_intance.list_subtitles(
         movies["dune"], {core.Language("spa")}
@@ -152,13 +189,13 @@ def test_language_equals_pool_intance_list_subtitles_empty_lang_equals(movies):
     assert not all(sub.language == core.Language("spa", "MX") for sub in subs)
 
 
-def test_language_equals_pool_intance_list_subtitles_return_nothing(movies):
+def test_language_equals_pool_intance_list_subtitles_return_nothing(movies, language_equals_provider):
     equals = [
         (core.Language("spa", "MX"), core.Language("eng")),
         (core.Language("spa"), core.Language("eng")),
     ]
     language_equals_pool_intance = core.SZProviderPool(
-        {"opensubtitlescom"}, language_equals=equals
+        {language_equals_provider}, language_equals=equals
     )
     subs = language_equals_pool_intance.list_subtitles(
         movies["dune"], {core.Language("spa")}
